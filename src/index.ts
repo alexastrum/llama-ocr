@@ -1,15 +1,32 @@
 import Together from "together-ai";
 import fs from "fs";
+import zod from "zod";
 
-export async function ocr({
-  filePath,
-  apiKey = process.env.TOGETHER_API_KEY,
-  model = "Llama-3.2-90B-Vision",
-}: {
-  filePath: string;
-  apiKey?: string;
-  model?: "Llama-3.2-90B-Vision" | "Llama-3.2-11B-Vision" | "free";
-}) {
+export const ocrParamsSchema = zod.object({
+  systemPrompt: zod.string()
+    .default(`Convert the provided image into Markdown format. Ensure that all content from the page is included, such as headers, footers, subtexts, images (with alt text if possible), tables, and any other elements.
+
+Requirements:
+
+- Output Only Markdown: Return solely the Markdown content without any additional explanations or comments.
+- No Delimiters: Do not use code fences or delimiters like \`\`\`markdown.
+- Complete Content: Do not omit any part of the page, including headers, footers, and subtext.`),
+  filePath: zod.string(),
+  apiKey: zod.string().default(process.env.TOGETHER_API_KEY),
+  model: zod
+    .enum(["Llama-3.2-90B-Vision", "Llama-3.2-11B-Vision", "free"])
+    .default("Llama-3.2-90B-Vision"),
+});
+
+export type OcrParams = zod.infer<typeof ocrParamsSchema>;
+
+export const OcrOutputSchema = zod.string();
+
+export type OcrOutput = zod.infer<typeof OcrOutputSchema>;
+
+export async function ocr(params: OcrParams) {
+  const { systemPrompt, filePath, apiKey, model } =
+    ocrParamsSchema.parse(params);
   const visionLLM =
     model === "free"
       ? "meta-llama/Llama-Vision-Free"
@@ -19,29 +36,27 @@ export async function ocr({
     apiKey,
   });
 
-  let finalMarkdown = await getMarkDown({ together, visionLLM, filePath });
+  let finalMarkdown = await getMarkDown({
+    systemPrompt,
+    together,
+    visionLLM,
+    filePath,
+  });
 
   return finalMarkdown;
 }
 
 async function getMarkDown({
+  systemPrompt,
   together,
   visionLLM,
   filePath,
 }: {
+  systemPrompt: string;
   together: Together;
   visionLLM: string;
   filePath: string;
 }) {
-  const systemPrompt = `Convert the provided image into Markdown format. Ensure that all content from the page is included, such as headers, footers, subtexts, images (with alt text if possible), tables, and any other elements.
-
-  Requirements:
-
-  - Output Only Markdown: Return solely the Markdown content without any additional explanations or comments.
-  - No Delimiters: Do not use code fences or delimiters like \`\`\`markdown.
-  - Complete Content: Do not omit any part of the page, including headers, footers, and subtext.
-  `;
-
   const finalImageUrl = isRemoteFile(filePath)
     ? filePath
     : `data:image/jpeg;base64,${encodeImage(filePath)}`;
