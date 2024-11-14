@@ -20,13 +20,17 @@ Requirements:
 
 export type OcrParams = zod.infer<typeof ocrParamsSchema>;
 
+export const ocrDefaults: OcrParams = {};
+
 export const OcrOutputSchema = zod.string();
 
 export type OcrOutput = zod.infer<typeof OcrOutputSchema>;
 
 export async function ocr(params: OcrParams) {
-  const { systemPrompt, filePath, apiKey, model } =
-    ocrParamsSchema.parse(params);
+  const { systemPrompt, filePath, apiKey, model } = ocrParamsSchema.parse({
+    ...ocrDefaults,
+    ...params,
+  });
   const visionLLM =
     model === "free"
       ? "meta-llama/Llama-Vision-Free"
